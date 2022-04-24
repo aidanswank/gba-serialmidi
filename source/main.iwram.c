@@ -8,39 +8,11 @@
 #include <stdio.h>
 #include <math.h>
 
-// this is for htoa to have a place to store a string
-u8 tempStr[32];
-// converts hex number to string
-u8 *htoa(u32 number)
-{
-	s8 i, tempNum;
-	u8 *str = tempStr;
-
-	*str++ = '0';
-	*str++ = 'x';
-	for(i = 7; i >= 0; i--)
-	{
-		tempNum = (number >> (i << 2)) & 15;
-		if(tempNum == 0)
-			*str++ = '0';
-		else if(tempNum < 10)
-		{
-			*str++ = ((u8)'1') + (tempNum - 1);
-		}
-		else
-		{
-			*str++ = ((u8)'A') + (tempNum - 10);
-		}
-	}
-	*str = '\0';
-
-	return tempStr;
-}
+#include "utils.h"
 
 #define REPEAT_BYTE(x) ((x) | ((x) << 8) | ((x) << 16) | ((x) << 24))
 
 #include "mgba.h"
-#define eprint(...) mgba_printf(MGBA_LOG_DEBUG, __VA_ARGS__);
 
 // I think the FIFO is completely transparent to the user code, compared to no
 // FIFO. It basically buys you 3 extra sent chars worth of cycles.
@@ -70,56 +42,42 @@ int freq2rate(float f)
   return r;
 }
 
-unsigned short current_duty = SSQR_DUTY1_4;
+// unsigned short current_duty = SSQR_DUTY1_4;
 
-void do_keys() {
-  key_poll();
+// void do_keys() {
+//   key_poll();
 
-    if(key_hit(KEY_A)) {
-      current_duty = SSQR_DUTY3_4;
-      write_console_line("That tickles!\n");
-    }
-    if(key_hit(KEY_B)) {
-      current_duty = SSQR_DUTY1_8;
-      snd_uart_ret("some data\n", 10);
-    }
-    if(key_hit(KEY_LEFT)) {
-      write_console_line("passthrough uart irq mode set\n");
-      irq_add(II_SERIAL, handle_uart_ret);
-    }
-    if(key_hit(KEY_RIGHT)) {
-      write_console_line("Gbaser uart irq mode set\n");
-      irq_add(II_SERIAL, handle_uart_gbaser);
-    }
-    if(key_hit(KEY_SELECT)) {
-      toggle_fifo();
-    }
-    if(key_hit(KEY_START)) {
-      help();
-    }
-    if(key_hit(KEY_L)) {
-      print_register(&siocnt, REG_SIOCNT);
-    }
-    if(key_hit(KEY_R)) {
-      print_register(&rcnt, REG_RCNT);
-    }
-}
+//     if(key_hit(KEY_A)) {
+//       // current_duty = SSQR_DUTY3_4;
+//       write_console_line("That tickles!\n");
+//     }
+//     if(key_hit(KEY_B)) {
+//       // current_duty = SSQR_DUTY1_8;
+//       snd_uart_ret("some data\n", 10);
+//     }
+//     if(key_hit(KEY_LEFT)) {
+//       write_console_line("passthrough uart irq mode set\n");
+//       irq_add(II_SERIAL, handle_uart_ret);
+//     }
+//     if(key_hit(KEY_RIGHT)) {
+//       write_console_line("Gbaser uart irq mode set\n");
+//       irq_add(II_SERIAL, handle_uart_gbaser);
+//     }
+//     if(key_hit(KEY_SELECT)) {
+//       toggle_fifo();
+//     }
+//     if(key_hit(KEY_START)) {
+//       help();
+//     }
+//     if(key_hit(KEY_L)) {
+//       print_register(&siocnt, REG_SIOCNT);
+//     }
+//     if(key_hit(KEY_R)) {
+//       print_register(&rcnt, REG_RCNT);
+//     }
+// }
 
 #include "lookup.h"
-
-void play_midi_event(u8* event)
-{
-  // double f = midi2Freq(event[1]);
-  // int rate = freq2rate(f);
-  float velocity = event[2];
-  velocity = velocity/15;
-  if(event[0]==144)
-  {
-    REG_SND1CNT= SSQR_ENV_BUILD((int)velocity, 0, 2) | current_duty;
-    int r = rate_table[ event[1] ];
-    REG_SND1FREQ = SFREQ_RESET | r;
-  }
-}
 
 void print_num(int num)
 {
@@ -132,37 +90,117 @@ void print_num(int num)
   write_console_line(" ");
 }
 
-////// NOISE GEN STUFF???
-// Click divider frequency (0,1,2..8 = f*2,f,f/2..f/7)
-#define SNS_FREQ(i)		(i)
+// ////// NOISE GEN STUFF???
+// // Click divider frequency (0,1,2..8 = f*2,f,f/2..f/7)
+// #define SNS_FREQ(i)		(i)
 
-// Counter stages 
-#define SNS_CNT_7		(1<<2)
-#define SNS_CNT_15		0
+// // Counter stages 
+// #define SNS_CNT_7		(1<<2)
+// #define SNS_CNT_15		0
 
-// Counter pre-stepper freqency (0..13)
-#define SNS_STEP(i)		(i<<3)
+// // Counter pre-stepper freqency (0..13)
+// #define SNS_STEP(i)		(i<<3)
 
-// Timed mode
-#define SNS_CONTINUOUS	0
-#define SNS_TIMED		(1<<14)
+// // Timed mode
+// #define SNS_CONTINUOUS	0
+// #define SNS_TIMED		(1<<14)
 
-// Reset
-#define SNS_RESET		(1<<15)
+// // Reset
+// #define SNS_RESET		(1<<15)
+
+
+#include "m7font4bpp.h"
+
+#include "map.h"
+
+enum Channels {
+    SQUARE1,
+    SQUARE2,
+    WAVE,
+    NOISE,
+    TOTAL,
+};
+
+#include "ui_globals.h"
+#include "render.h"
+
+#include "square_channels.h"
+#include "noise_channel.h"
+#include "wave_channel.h"
+
+void Controller()
+{
+    if(key_is_down(KEY_START))
+    {
+        if(key_hit(KEY_RIGHT))
+        {
+            if(cursorX<3)
+            {
+                cursorX++;
+            }
+            //     curSelect++;
+        }
+        if(key_hit(KEY_LEFT))
+        {
+            if(cursorX>0)
+            {
+                cursorX--;
+            }
+            //     curSelect--;
+        }
+    } else {
+        if(!key_is_down(KEY_B))
+        {
+            if(key_hit(KEY_UP))
+            {
+                // if(cursorY>0)
+                //     cursorY--;
+                cursorLocationAtPages[ cursorX ] = cursorLocationAtPages[ cursorX ] - 1;
+            }
+            
+            if(key_hit(KEY_DOWN))
+            {
+                // if(cursorY<optionsLen-1)
+                // cursorY++;
+                cursorLocationAtPages[ cursorX ] = cursorLocationAtPages[ cursorX ] + 1;
+            }
+        } else {
+            // editing value
+            if(key_hit(KEY_RIGHT))
+            {
+                // if(optionsValues[ cursorY ] < optionsValuesLengths[ cursorY ]-1){
+                //     optionsValues[ cursorY ] += 1;
+                //     eprint("cursorY %i", cursorY);
+                // }
+                refOptionTable[ cursorX ][ cursorLocationAtPages[ cursorX ] ] += 1;
+            }
+            if(key_hit(KEY_LEFT))
+            {
+                // if(optionsValues[ cursorY ] > 0){
+                //     optionsValues[ cursorY ] -= 1;
+                // }
+                refOptionTable[ cursorX ][ cursorLocationAtPages[ cursorX ] ] -= 1;
+            }
+        }
+    }
+}
 
 s32 main() {
+
+  screen_init();
+
   // set up display
 	REG_DISPCNT= DCNT_MODE0 | DCNT_BG0;
   
-	// Base TTE init for tilemaps
-	tte_init_se(
-		0,						        // Background number (0-3)
-		BG_CBB(0)|BG_SBB(31),	// BG control
-		0,					        	// Tile offset (special cattr)
-		CLR_WHITE,		        // Ink color
-		14,						        // BitUnpack offset (on-pixel = 15)
-		NULL,			        		// Default font (sys8) 
-		NULL);					      // Default renderer (se_drawg_s)
+	// // Base TTE init for tilemaps
+	// tte_init_se(
+	// 	0,						        // Background number (0-3)
+	// 	BG_CBB(0)|BG_SBB(31),	// BG control
+	// 	0,					        	// Tile offset (special cattr)
+	// 	CLR_WHITE,		        // Ink color
+	// 	14,						        // BitUnpack offset (on-pixel = 15)
+	// 	NULL,			        		// Default font (sys8) 
+	// 	NULL);					      // Default renderer (se_drawg_s)
 
 	// Initialize sprites (outside of screen)
 	OBJ_ATTR obj_attr = {160, 240, 0, 0};
@@ -172,24 +210,37 @@ s32 main() {
   init_circ_buff(&g_uart_rcv_buffer, g_rcv_buffer, UART_RCV_BUFFER_SIZE);
   init_uart(SIO_BAUD_115200);
 
+
+  // link diff array values up
+  refOptionTable[0] = square1_values;
+  refOptionTable[1] = square2_values;
+  refOptionTable[2] = wave_values;
+  refOptionTable[3] = noise_values;
+
+  SndInit(SND_FREQ_18157);
+
   // set irqs
 	irq_init(NULL);
   irq_add(II_SERIAL, handle_uart_gbaser);
-	irq_add(II_VBLANK, NULL);
+  irq_add(II_VBLANK, SndVSync);
+	// irq_add(II_VBLANK, NULL);
 
-  // welcome text
-  write_console_line(".. and now we wait ..\n\n\n");
-  write_console_line("ready to receive from uart\n");
-  write_console_line("uart mode: Gbaser\n");
-  help();
+  // // welcome text
+  // write_console_line(".. and now we wait ..\n\n\n");
+  // write_console_line("ready to receive from uart\n");
+  // write_console_line("uart mode: Gbaser\n");
+  // help();
 
-  u8 mynum = 100;
-  // eprint( "p = %p\n", (void *) mynum );
-  write_console_line(htoa((u32)(void *) mynum));
-  char str[3];
-  sprintf(str, "%d", mynum);
-  write_char(" ");
-  write_console_line(str);
+  // u8 mynum = 100;
+  // // eprint( "p = %p\n", (void *) mynum );
+  // write_console_line(htoa((u32)(void *) mynum));
+  // char str[3];
+  // sprintf(str, "%d", mynum);
+  // write_char(" ");
+  // write_console_line(str);
+
+
+  square_play(0);
 
   int ptick = 0;
   u8 midi_event[3];
@@ -200,6 +251,44 @@ s32 main() {
 		VBlankIntrWait();
     // do_keys();
     key_poll();
+    Controller();
+
+    // clear with tile 0 space 17,10 with offset 1,3
+    place_tiled_rectangle(17,10,1,3,0,map_data);
+
+    int cursor_sel = cursorX;
+
+    // display channel names
+    for(int i = 0; i < 4; i++)
+    {
+        if(i == cursor_sel)
+        {
+            font_write4(1 + (4 * i), 1, channelNames[i], map_data, 1);
+        } else {
+            font_write4(1 + (4 * i), 1, channelNames[i], map_data, 0);
+        }
+    }
+
+    switch (cursor_sel)
+    {
+        case 0:
+            // sqr1_settings();
+            square_settings(0);
+        break;
+        case 1:
+            // font_write4(1, 3, "SQUARE 2", map_data, 0);
+            square_settings(1);
+        break;
+        case 2:
+            wave_settings();
+        break;
+        case 3:
+            // font_write4(1, 3, "NOISE", map_data, 0);
+            noise_settings();
+        break;
+    }
+
+    SndMix();
 
     // if bytes > 0
     if(circ_bytes_available(&g_uart_rcv_buffer)) {
@@ -220,13 +309,16 @@ s32 main() {
 
           if(ptick%3==0)
           {
-            ptick=0;
-            for(int i = 0; i < 3; i++)
-            {
-              print_num(midi_event[i]);
-            }
-            write_console_line("\n");
-            play_midi_event(midi_event);
+            // ptick=0;
+            // for(int i = 0; i < 3; i++)
+            // {
+            //   print_num(midi_event[i]);
+            // }
+            // write_console_line("\n");
+            square1_values[1] = rate_table[ midi_event[2] ];
+            square1_values[4] = midi_event[1];
+            // play_midi_event(midi_event);
+            square_play(0);
           }
 
           // print_num(num);

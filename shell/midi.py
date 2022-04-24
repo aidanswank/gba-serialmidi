@@ -84,6 +84,7 @@ class MidiInputHandler(object):
             values = bytearray(message)
             print(values)
             # SER.write(values)
+            time.sleep(0.005);
             # send_gbaser_string(str2)
             send_bytes(values, 0x00000000, 0x01)
 

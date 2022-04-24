@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "sstream": "c"
+        "sstream": "c",
+        "lookup.h": "c",
+        "mgba.h": "c",
+        "ui_globals.h": "c"
     }
 }

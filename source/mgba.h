@@ -34,4 +34,6 @@ void mgba_printf(int level, const char* string, ...);
 bool8 mgba_open(void);
 void mgba_close(void);
 
+#define eprint(...) mgba_printf(MGBA_LOG_DEBUG, __VA_ARGS__);
+
 #endif
