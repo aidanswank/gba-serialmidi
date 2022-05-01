@@ -3,6 +3,12 @@
         "sstream": "c",
         "lookup.h": "c",
         "mgba.h": "c",
-        "ui_globals.h": "c"
+        "ui_globals.h": "c",
+        "algorithm": "cpp",
+        "chrono": "cpp",
+        "limits": "cpp",
+        "random": "cpp",
+        "ratio": "cpp",
+        "semaphore": "cpp"
     }
 }

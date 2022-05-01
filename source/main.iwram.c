@@ -239,11 +239,10 @@ s32 main() {
   // write_char(" ");
   // write_console_line(str);
 
-
   square_play(0);
 
   int ptick = 0;
-  u8 midi_event[3];
+  u8 midi_event[3] = {1,2,3};
 
   // main loop
 	while(1)
@@ -315,21 +314,51 @@ s32 main() {
             //   print_num(midi_event[i]);
             // }
             // write_console_line("\n");
-            square1_values[1] = rate_table[ midi_event[2] ];
-            square1_values[4] = midi_event[1];
-            // play_midi_event(midi_event);
-            square_play(0);
+            int control = midi_event[0];
+            int note_rate = rate_table[ midi_event[1] ];
+            if(control==144){ // "note on" on channel 1
+              float velocity = (midi_event[2]/127.0)*12.0;
+              square1_values[1] = (int)velocity;
+              square1_values[4] = note_rate;
+              square_play(0);
+              // font_write4(1, 16, "AADFASDFASDFASDF", map_data, 1);
+            }
+            if(control==145){ // "note on" on channel 2
+              float velocity = (midi_event[2]/127.0)*12.0;
+              square2_values[1] = (int)velocity;
+              square2_values[4] = note_rate;
+              square_play(1);
+            }
+            if(control==146){ // "note on" on channel 3
+              float velocity = (midi_event[2]/127.0)*64.0;
+              wave_values[0] = (int)velocity;
+              wave_values[1] = midi_event[1];
+              wave_play();
+            }
+            if(control==147){ // "note on" on channel 4
+              float velocity = (midi_event[2]/127.0)*12.0;
+              noise_values[0] = (int)velocity;
+              noise_values[3] = midi_event[1];
+              noise_play_patch();
+            }
+
           }
 
-          // print_num(num);
-          // vector_add(&midi_msg, num);
-          // write_console_line("size ");
-          // print_num(midi_msg.total);
-          // write_console_line("~ ");
-
         }
-
       }
     }
+
+
+    char str1[3] = "NNN";
+    sprintf(str1, "%d", midi_event[0]);
+    char str2[3] = "NNN";
+    sprintf(str2, "%d", midi_event[1]);
+    char str3[3] = "NNN";
+    sprintf(str3, "%d", midi_event[2]);
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%s%s%s", str1, str2, str3);
+
+    font_write4(2, 16, buf, map_data, 1);
+
   }
 }

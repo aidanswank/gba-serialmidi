@@ -79,12 +79,12 @@ class MidiInputHandler(object):
         str2=''
         for x in message:
             str2 += str(x)+',';
-        print(str2)
-        if message[0]==144:
+        # print(str2)
+        if message[0]==144 or message[0]==145 or message[0]==146 or message[0]==147:
             values = bytearray(message)
-            print(values)
+            # print(values)
             # SER.write(values)
-            time.sleep(0.005);
+            time.sleep(0.004 );
             # send_gbaser_string(str2)
             send_bytes(values, 0x00000000, 0x01)
 
