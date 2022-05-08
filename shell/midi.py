@@ -82,7 +82,7 @@ class MidiInputHandler(object):
         # print(str2)
         if message[0]==144 or message[0]==145 or message[0]==146 or message[0]==147:
             values = bytearray(message)
-            # print(values)
+            print(values)
             # SER.write(values)
             time.sleep(0.004 );
             # send_gbaser_string(str2)
